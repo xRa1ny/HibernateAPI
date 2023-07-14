@@ -4,6 +4,7 @@ import jakarta.persistence.NoResultException;
 import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import lombok.Getter;
 import me.xra1ny.hibernateapi.exceptions.ClassNotAnnotatedException;
@@ -50,6 +51,24 @@ public abstract class RDao {
         }
     }
 
+    public final <T extends REntity> List<T> getAll(@NotNull Class<T> type) {
+        try(Session session = getHibernateConfiguration().getSessionFactory().openSession()) {
+            final CriteriaBuilder builder = session.getCriteriaBuilder();
+            final CriteriaQuery<T> criteria = builder.createQuery(type);
+            final Root<T> from = criteria.from(type);
+
+            criteria.select(from);
+
+            final TypedQuery<T> typed = session.createQuery(criteria);
+
+            try {
+                return typed.getResultList();
+            }catch(NoResultException ex) {
+                return Collections.emptyList();
+            }
+        }
+    }
+
     @SafeVarargs
     @NotNull
     public final <T extends REntity> List<T> getAllByColumnValues(@NotNull Class<T> type, @NotNull Map.Entry<String, Object> @NotNull ... columnValues) {
@@ -60,15 +79,19 @@ public abstract class RDao {
 
             criteria.select(from);
 
+            final List<Predicate> predicates = new ArrayList<>();
+
             for(Map.Entry<String, Object> columns : columnValues) {
-                criteria.where(builder.equal(from.get(columns.getKey()), columns.getValue()));
+                predicates.add(builder.equal(from.get(columns.getKey()), columns.getValue()));
             }
+
+            criteria.where(predicates.toArray(new Predicate[0]));
 
             final TypedQuery<T> typed = session.createQuery(criteria);
 
             try {
                 return typed.getResultList();
-            }catch (NoResultException e) {
+            }catch (NoResultException ex) {
                 return Collections.emptyList();
             }
         }
